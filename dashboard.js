@@ -4,19 +4,16 @@
    ASSUMED FIRESTORE SCHEMA (see note below):
      users/{uid}/accounts/{accountId}
        name, startingBalance, status, createdAt,
-       rules: { target, maxDrawdownPct, dailyLossLimitPct }  (optional)
+       accountType/source/journalAccount marker identifying a JOURNAL account
      users/{uid}/accounts/{accountId}/trades/{tradeId}
        symbol, direction, entry, exit, stopLoss, takeProfit, lotSize,
        risk, pnl (or profitLoss/pl), result ('win'|'loss'|'be'),
        rMultiple, openTime/closeTime (or date), session, strategy, notes
 
-   No challenge.html or existing account/trade Firestore code was
-   included in the upload — layout.html's Firebase script only touches
-   users/{uid} for theme/profile. So this schema is NEW, not reused
-   from anywhere, because there was nothing to reuse. If the real app
-   uses different collection/field names, only COLLECTION_PATHS and
-   normalizeTrade() below need to change — everything downstream reads
-   from the normalized shape.
+   Dashboard is JOURNAL-ONLY. Challenge accounts must never appear here.
+   Journal accounts are identified by an explicit journal marker on the
+   Firestore account document; this avoids guessing from names/status/type.
+   The existing users/{uid}/accounts/{accountId}/trades/{tradeId} paths remain unchanged.
    ===================================================================== */
 (function () {
   const wrap = document.getElementById('eva-dashboard');
@@ -37,7 +34,6 @@
     dateRange: { type: 'today', start: null, end: null },
     filters: { strategy: '', session: '', result: '', symbol: '' },
     calendarCursor: (() => { const d = new Date(); d.setDate(1); return d; })(),
-    equityTimeframe: 'ALL',
     dashboardMetrics: null,
     unsubscribeTrades: null,
     unsubscribeAccounts: null,
@@ -111,7 +107,7 @@
     else if (result === 'win') pnl = Math.abs(pnl);
     else pnl = 0; // break-even
 
-    const closeMs = toMillis(raw.tradeDate) ?? toMillis(raw.closeTime) ?? toMillis(raw.date) ?? toMillis(raw.openTime);
+    const closeMs = toMillis(raw.closeTime) ?? toMillis(raw.date) ?? toMillis(raw.openTime);
 
     return {
       id,
@@ -257,27 +253,6 @@
     console.assert(JSON.stringify(dd) === JSON.stringify([0, 200, 0, 200]), 'FAIL: running-peak drawdown', dd);
   })();
 
-  /* ======================== ECHARTS LOADER ============================ */
-  async function ensureECharts() {
-    if (typeof window.echarts !== 'undefined') return window.echarts;
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-eva-echarts]');
-      if (existing) {
-        existing.addEventListener('load', resolve, { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js';
-      script.dataset.evaEcharts = 'true';
-      script.onload = resolve;
-      script.onerror = () => reject(new Error('Unable to load ECharts.'));
-      document.head.appendChild(script);
-    });
-    if (typeof window.echarts === 'undefined') throw new Error('ECharts loaded without exposing window.echarts.');
-    return window.echarts;
-  }
-
   /* ===================== 4. FIRESTORE (dynamic import) =============== */
   let fb = null; // { app, auth, db, fns }
   async function initFirebase() {
@@ -297,28 +272,37 @@
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = fs.getFirestore(app);
-    // Firebase v12 uses the modular Firestore API. Keep all Firestore calls
-    // on the same SDK version and never mix compat-style fs.collection()/fs.onSnapshot().
-    fb = {
-      app, auth, db,
-      collection: fs.collection,
-      onSnapshot: fs.onSnapshot,
-      onAuthStateChanged
-    };
+    fb = { app, auth, db, fs, onAuthStateChanged };
     return new Promise((resolve) => {
       onAuthStateChanged(auth, (user) => resolve(user));
     });
   }
 
+  function isJournalAccount(acc) {
+    if (!acc || typeof acc !== 'object') return false;
+    // Explicit journal markers are preferred. Legacy journal accounts are
+    // accepted only when they do NOT carry challenge-only fields.
+    if (acc.journalAccount === true) return true;
+    const type = String(acc.accountType || '').toLowerCase();
+    const source = String(acc.source || acc.accountSource || '').toLowerCase();
+    if (type === 'journal' || type === 'trading journal' || source === 'journal') return true;
+    const challengeFields = ['phaseRules', 'phasesEnabled', 'currentPhase', 'deadline', 'firmName'];
+    return !challengeFields.some((key) => Object.prototype.hasOwnProperty.call(acc, key));
+  }
+
   function subscribeAccounts(uid) {
     if (state.unsubscribeAccounts) state.unsubscribeAccounts();
-    const { collection, onSnapshot, db } = fb;
-    const ref = collection(db, ...COLLECTION_PATHS.accounts(uid));
-    state.unsubscribeAccounts = onSnapshot(
+    const { fs, db } = fb;
+    const ref = fs.collection(db, ...COLLECTION_PATHS.accounts(uid));
+    state.unsubscribeAccounts = fs.onSnapshot(
       ref,
       (snap) => {
-        state.accounts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        state.accounts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isJournalAccount);
         renderAccountSelector();
+        if (state.selectedAccountId && !state.accounts.some(a => a.id === state.selectedAccountId)) {
+          if (state.unsubscribeTrades) { state.unsubscribeTrades(); state.unsubscribeTrades = null; }
+          state.selectedAccountId = null; state.trades = []; state.filteredTrades = [];
+        }
         if (!state.selectedAccountId && state.accounts.length) {
           selectAccount(state.accounts[0].id);
         } else if (state.selectedAccountId) {
@@ -333,9 +317,9 @@
 
   function subscribeTrades(uid, accountId) {
     if (state.unsubscribeTrades) state.unsubscribeTrades();
-    const { collection, onSnapshot, db } = fb;
-    const ref = collection(db, ...COLLECTION_PATHS.trades(uid, accountId));
-    state.unsubscribeTrades = onSnapshot(
+    const { fs, db } = fb;
+    const ref = fs.collection(db, ...COLLECTION_PATHS.trades(uid, accountId));
+    state.unsubscribeTrades = fs.onSnapshot(
       ref,
       (snap) => {
         state.trades = snap.docs.map((d) => normalizeTrade(d.id, d.data(), accountId));
@@ -359,7 +343,7 @@
     if (!state.accounts.length) {
       el.acctList.innerHTML = `<div class="db-empty" style="padding:18px 10px;">
         <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
-        <span>No accounts yet</span></div>`;
+        <span>No journal accounts yet</span></div>`;
     } else {
       el.acctList.innerHTML = '';
       state.accounts.forEach((acc) => {
@@ -409,36 +393,6 @@
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-
-  /* ===================== EQUITY CONTROLS ============================= */
-  el.equityTimeframeSwitch = document.getElementById('equity-timeframe-switch');
-  el.equityTimeframeSwitch?.querySelectorAll('button[data-timeframe]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      el.equityTimeframeSwitch.querySelectorAll('button').forEach((b) => b.classList.toggle('db-active', b === btn));
-      state.equityTimeframe = btn.dataset.timeframe || 'ALL';
-      if (state.dashboardMetrics) renderEquityChart(state.dashboardMetrics);
-    });
-  });
-
-  function wireChartControls() {
-    const container = document.getElementById('equity-chart');
-    const buttons = Array.from(container?.parentElement?.querySelectorAll('.db-icon-controls button') || []);
-    const download = buttons.find((b) => b.getAttribute('aria-label') === 'Download chart');
-    const expand = buttons.find((b) => b.getAttribute('aria-label') === 'Expand chart');
-    download?.addEventListener('click', () => {
-      const chart = charts['equity-chart'];
-      if (!chart) return;
-      const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: getComputedStyle(wrap).getPropertyValue('--eva-surface') || '#fff' });
-      const a = document.createElement('a'); a.href = url; a.download = 'eva-equity-chart.png'; a.click();
-    });
-    expand?.addEventListener('click', () => {
-      if (!container) return;
-      container.classList.toggle('db-chart-expanded');
-      const chart = charts['equity-chart'];
-      requestAnimationFrame(() => chart?.resize());
-    });
-  }
-  wireChartControls();
 
   /* ========================= 6. FILTERS ============================= */
   function rangeToDates(type) {
@@ -564,8 +518,8 @@
       rebuildDerivedAndRender();
     });
   }
-  function openCustomRangeModal() { ensureCustomRangeModal(); const el = document.getElementById('custom-range-modal'); el.classList.add('db-modal-open'); el.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
-  function closeCustomRangeModal() { const el = document.getElementById('custom-range-modal'); if (!el) return; el.classList.remove('db-modal-open'); el.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+  function openCustomRangeModal() { ensureCustomRangeModal(); document.getElementById('custom-range-modal').classList.add('db-modal-open'); }
+  function closeCustomRangeModal() { document.getElementById('custom-range-modal')?.classList.remove('db-modal-open'); }
 
   /* ======================= 7. CARDS RENDER =========================== */
   function renderCards(m) {
@@ -639,28 +593,16 @@
     if (!m.equityCurve.length || m.totalTrades === 0) { toggleChartEmpty('equity-chart', true); return; }
     toggleChartEmpty('equity-chart', false);
     const colors = themeColors();
-    const now = Date.now();
-    const cutoff = ({ '1D': 1, '1W': 7, '1M': 30, '3M': 90 }[state.equityTimeframe] || 0);
-    let points = m.equityCurve;
-    if (cutoff) {
-      const minMs = now - cutoff * 86400000;
-      const prior = m.equityCurve.filter((p) => p.timestamp < minMs).slice(-1);
-      const recent = m.equityCurve.filter((p) => p.timestamp >= minMs);
-      points = prior.length ? [prior[0], ...recent] : recent;
-    } else if (state.equityTimeframe === 'YTD') {
-      const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
-      const prior = m.equityCurve.filter((p) => p.timestamp < yearStart).slice(-1);
-      const recent = m.equityCurve.filter((p) => p.timestamp >= yearStart);
-      points = prior.length ? [prior[0], ...recent] : recent;
-    }
-    if (!points.length) { toggleChartEmpty('equity-chart', true); return; }
     chart.setOption({
       grid: baseGrid(colors),
       tooltip: { trigger: 'axis', valueFormatter: (v) => fmtMoney(v) },
       xAxis: { type: 'time', axisLine: { lineStyle: { color: colors.border } }, axisLabel: { color: colors.dim } },
       yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: colors.border, opacity: 0.4 } }, axisLabel: { color: colors.dim, formatter: (v) => '$' + v } },
-      series: [{ type: 'line', showSymbol: false, smooth: 0.2, lineStyle: { color: colors.accent, width: 2 }, areaStyle: { color: colors.accent, opacity: 0.12 }, data: points.map((p) => [p.timestamp, Math.round(p.equity * 100) / 100]) }],
-      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
+      series: [{
+        type: 'line', showSymbol: false, smooth: 0.2, lineStyle: { color: colors.accent, width: 2 },
+        areaStyle: { color: colors.accent, opacity: 0.12 },
+        data: m.equityCurve.map((p) => [p.timestamp, Math.round(p.equity * 100) / 100]),
+      }],
     }, true);
   }
 
@@ -721,15 +663,11 @@
     const chart = getOrInitChart('challenge-progress-chart');
     if (!chart) return;
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
-    const phase = Number(acc?.currentPhase) || 1;
-    const phaseRules = acc?.phaseRules?.[`phase${phase}`] || acc?.rules || {};
-    const targetPct = Number(phaseRules.profitTargetPct ?? phaseRules.profitTargetPercent ?? phaseRules.targetPercent ?? 0);
-    const targetAmount = Number(phaseRules.profitTargetAmount ?? phaseRules.targetAmount ?? phaseRules.target ?? 0) ||
-      (targetPct > 0 ? (m.startingBalance * targetPct / 100) : 0);
-    if (!acc || !(targetAmount > 0)) { toggleChartEmpty('challenge-progress-chart', true); return; }
+    const target = acc?.rules?.target;
+    if (!acc || !target) { toggleChartEmpty('challenge-progress-chart', true); return; }
     toggleChartEmpty('challenge-progress-chart', false);
     const colors = themeColors();
-    const progressPct = Math.max(0, Math.min(100, (m.totalPL / targetAmount) * 100));
+    const progressPct = Math.max(0, Math.min(100, (m.totalPL / Number(target)) * 100));
     chart.setOption({
       series: [{
         type: 'gauge', startAngle: 90, endAngle: -270, radius: '85%',
@@ -774,7 +712,7 @@
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
     const dailyPL = state.dashboardMetrics?.dailyPL || {};
     const tradesByDay = {};
-    for (const t of state.trades) {
+    for (const t of state.filteredTrades) {
       if (t.closeTimeMs == null) continue;
       const k = dayKey(t.closeTimeMs);
       (tradesByDay[k] = tradesByDay[k] || []).push(t);
@@ -877,7 +815,7 @@
   }
   el.dayModal?.querySelectorAll('[data-modal-close]').forEach((b) => b.addEventListener('click', closeDayModal));
   el.dayModal?.addEventListener('click', (e) => { if (e.target === el.dayModal) closeDayModal(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDayModal(); closeCustomRangeModal(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDayModal(); });
 
   /* ==================== 10. REBUILD PIPELINE ========================= */
   function rebuildDerivedAndRender() {
@@ -900,7 +838,6 @@
   /* ============================= BOOT ================================ */
   (async function boot() {
     try {
-      await ensureECharts();
       const user = await initFirebase();
       if (!user) return; // layout.html's own auth guard redirects to login
       state.uid = user.uid;
@@ -910,5 +847,6 @@
     }
   })();
 })();
+
 
 
