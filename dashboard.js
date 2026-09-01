@@ -360,9 +360,10 @@ function filterTrades(trades, range) {
 
 /* Advanced filters (Strategy/Session/Result/Symbol) — applied on top of the
    date-range filter, client-side, against the real normalized trade fields.
-   Account-level filtering isn't included here: the dashboard is already
-   scoped to one selected account via the account dropdown, which we were
-   told never to change. */
+   Account switching lives in populateAccountFilter/wireAdvancedFilters above
+   and reuses selectAccount() directly — it isn't a trade-level predicate
+   here because the dashboard is architecturally scoped to one account's
+   trades at a time (the account dropdown we were told never to change). */
 function applyTradeFilters(trades) {
   const f = state.filters;
   return trades.filter(t => {
@@ -387,9 +388,30 @@ function populateFilterOptions() {
   };
   fillSelect("db-filter-strategy", strategies, state.filters.strategy, "All strategies");
   fillSelect("db-filter-session", sessions, state.filters.session, "All sessions");
+  populateAccountFilter();
+}
+
+/* Account field inside Advanced Filters — mirrors the real journal accounts
+   list (same source as the existing account dropdown, never a second data
+   source). The dashboard architecture only ever shows one account's data at
+   a time (that's the existing, untouched account-selection system), so this
+   select always reflects state.selectedAccountId rather than offering a
+   non-functional "view all accounts at once" option. Choosing a different
+   account here calls the exact same selectAccount() the header dropdown
+   uses — it's an additional entry point onto the same real logic, not a
+   parallel one. */
+function populateAccountFilter() {
+  const el = byId("db-filter-account");
+  if (!el) return;
+  el.innerHTML = state.accounts.map(acc =>
+    `<option value="${escapeHtml(acc.id)}"${acc.id === state.selectedAccountId ? " selected" : ""}>${escapeHtml(acc.name)}</option>`
+  ).join("") || `<option value="">No accounts yet</option>`;
 }
 
 function wireAdvancedFilters() {
+  byId("db-filter-account").addEventListener("change", (e) => {
+    if (e.target.value) selectAccount(e.target.value); // reuses the untouched account-selection system
+  });
   byId("db-filter-strategy").addEventListener("change", (e) => { state.filters.strategy = e.target.value; recomputeAndRender(); });
   byId("db-filter-session").addEventListener("change", (e) => { state.filters.session = e.target.value; recomputeAndRender(); });
   byId("db-filter-result").addEventListener("change", (e) => { state.filters.result = e.target.value; recomputeAndRender(); });
@@ -1327,3 +1349,4 @@ if (document.readyState === "loading") {
 } else {
   boot();
 }
+
