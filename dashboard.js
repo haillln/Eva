@@ -37,8 +37,8 @@
     dateRange: { type: 'today', start: null, end: null },
     filters: { strategy: '', session: '', result: '', symbol: '' },
     calendarCursor: (() => { const d = new Date(); d.setDate(1); return d; })(),
+    equityTimeframe: 'ALL',
     dashboardMetrics: null,
-    accountMetrics: null,
     unsubscribeTrades: null,
     unsubscribeAccounts: null,
   };
@@ -111,7 +111,7 @@
     else if (result === 'win') pnl = Math.abs(pnl);
     else pnl = 0; // break-even
 
-    const closeMs = toMillis(raw.closeTime) ?? toMillis(raw.date) ?? toMillis(raw.openTime);
+    const closeMs = toMillis(raw.tradeDate) ?? toMillis(raw.closeTime) ?? toMillis(raw.date) ?? toMillis(raw.openTime);
 
     return {
       id,
@@ -257,6 +257,27 @@
     console.assert(JSON.stringify(dd) === JSON.stringify([0, 200, 0, 200]), 'FAIL: running-peak drawdown', dd);
   })();
 
+  /* ======================== ECHARTS LOADER ============================ */
+  async function ensureECharts() {
+    if (typeof window.echarts !== 'undefined') return window.echarts;
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-eva-echarts]');
+      if (existing) {
+        existing.addEventListener('load', resolve, { once: true });
+        existing.addEventListener('error', reject, { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js';
+      script.dataset.evaEcharts = 'true';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Unable to load ECharts.'));
+      document.head.appendChild(script);
+    });
+    if (typeof window.echarts === 'undefined') throw new Error('ECharts loaded without exposing window.echarts.');
+    return window.echarts;
+  }
+
   /* ===================== 4. FIRESTORE (dynamic import) =============== */
   let fb = null; // { app, auth, db, fns }
   async function initFirebase() {
@@ -276,7 +297,14 @@
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = fs.getFirestore(app);
-    fb = { app, auth, db, fs, onAuthStateChanged };
+    // Firebase v12 uses the modular Firestore API. Keep all Firestore calls
+    // on the same SDK version and never mix compat-style fs.collection()/fs.onSnapshot().
+    fb = {
+      app, auth, db,
+      collection: fs.collection,
+      onSnapshot: fs.onSnapshot,
+      onAuthStateChanged
+    };
     return new Promise((resolve) => {
       onAuthStateChanged(auth, (user) => resolve(user));
     });
@@ -284,12 +312,12 @@
 
   function subscribeAccounts(uid) {
     if (state.unsubscribeAccounts) state.unsubscribeAccounts();
-    const { fs, db } = fb;
-    const ref = fs.collection(db, ...COLLECTION_PATHS.accounts(uid));
-    state.unsubscribeAccounts = fs.onSnapshot(
+    const { collection, onSnapshot, db } = fb;
+    const ref = collection(db, ...COLLECTION_PATHS.accounts(uid));
+    state.unsubscribeAccounts = onSnapshot(
       ref,
       (snap) => {
-        state.accounts = snap.docs.map((d) => normalizeAccount(d.id, d.data()));
+        state.accounts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         renderAccountSelector();
         if (!state.selectedAccountId && state.accounts.length) {
           selectAccount(state.accounts[0].id);
@@ -305,9 +333,9 @@
 
   function subscribeTrades(uid, accountId) {
     if (state.unsubscribeTrades) state.unsubscribeTrades();
-    const { fs, db } = fb;
-    const ref = fs.collection(db, ...COLLECTION_PATHS.trades(uid, accountId));
-    state.unsubscribeTrades = fs.onSnapshot(
+    const { collection, onSnapshot, db } = fb;
+    const ref = collection(db, ...COLLECTION_PATHS.trades(uid, accountId));
+    state.unsubscribeTrades = onSnapshot(
       ref,
       (snap) => {
         state.trades = snap.docs.map((d) => normalizeTrade(d.id, d.data(), accountId));
@@ -326,11 +354,6 @@
   }
 
   /* ===================== 5. ACCOUNT SELECTOR UI ===================== */
-  function normalizeAccount(id, raw) {
-    const startingBalance = Number(raw.startingBalance ?? raw.initialBalance ?? raw.accountSize ?? raw.balance ?? 0) || 0;
-    return { id, ...raw, name: raw.name ?? raw.accountName ?? id, startingBalance, status: raw.status ?? 'active' };
-  }
-
   function renderAccountSelector() {
     if (!el.acctList) return;
     if (!state.accounts.length) {
@@ -361,18 +384,13 @@
   function renderAccountHeader() {
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
     if (el.acctName) el.acctName.textContent = acc ? (acc.name || 'Account') : 'Select account';
-    if (el.acctBalance && acc) {
-      const m = state.accountMetrics;
-      el.acctBalance.textContent = m ? fmtMoney(m.balance) : `Starting ${fmtMoney(Number(acc.startingBalance) || 0)}`;
-    }
+    if (el.acctBalance && acc) el.acctBalance.textContent = `Starting ${fmtMoney(Number(acc.startingBalance) || 0)}`;
   }
 
   function renderEmptyDashboard() {
     ['balance', 'total-pl', 'equity-card', 'win-rate', 'total-trades', 'profit-factor', 'avg-win', 'avg-loss', 'drawdown', 'recovery-factor', 'best-day', 'worst-day', 'equity']
       .forEach((f) => setVal(f, '—'));
     setVal('equity-change-amount', 'No account selected');
-    state.accountMetrics = null;
-    state.dashboardMetrics = null;
   }
 
   function setAccountPanel(open) {
@@ -391,6 +409,36 @@
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+
+  /* ===================== EQUITY CONTROLS ============================= */
+  el.equityTimeframeSwitch = document.getElementById('equity-timeframe-switch');
+  el.equityTimeframeSwitch?.querySelectorAll('button[data-timeframe]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      el.equityTimeframeSwitch.querySelectorAll('button').forEach((b) => b.classList.toggle('db-active', b === btn));
+      state.equityTimeframe = btn.dataset.timeframe || 'ALL';
+      if (state.dashboardMetrics) renderEquityChart(state.dashboardMetrics);
+    });
+  });
+
+  function wireChartControls() {
+    const container = document.getElementById('equity-chart');
+    const buttons = Array.from(container?.parentElement?.querySelectorAll('.db-icon-controls button') || []);
+    const download = buttons.find((b) => b.getAttribute('aria-label') === 'Download chart');
+    const expand = buttons.find((b) => b.getAttribute('aria-label') === 'Expand chart');
+    download?.addEventListener('click', () => {
+      const chart = charts['equity-chart'];
+      if (!chart) return;
+      const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: getComputedStyle(wrap).getPropertyValue('--eva-surface') || '#fff' });
+      const a = document.createElement('a'); a.href = url; a.download = 'eva-equity-chart.png'; a.click();
+    });
+    expand?.addEventListener('click', () => {
+      if (!container) return;
+      container.classList.toggle('db-chart-expanded');
+      const chart = charts['equity-chart'];
+      requestAnimationFrame(() => chart?.resize());
+    });
+  }
+  wireChartControls();
 
   /* ========================= 6. FILTERS ============================= */
   function rangeToDates(type) {
@@ -516,15 +564,15 @@
       rebuildDerivedAndRender();
     });
   }
-  function openCustomRangeModal() { ensureCustomRangeModal(); document.getElementById('custom-range-modal').classList.add('db-modal-open'); }
-  function closeCustomRangeModal() { document.getElementById('custom-range-modal')?.classList.remove('db-modal-open'); }
+  function openCustomRangeModal() { ensureCustomRangeModal(); const el = document.getElementById('custom-range-modal'); el.classList.add('db-modal-open'); el.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+  function closeCustomRangeModal() { const el = document.getElementById('custom-range-modal'); if (!el) return; el.classList.remove('db-modal-open'); el.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
 
   /* ======================= 7. CARDS RENDER =========================== */
-  function renderCards(m, accountM = m) {
-    setVal('balance', fmtMoney(accountM.balance));
+  function renderCards(m) {
+    setVal('balance', fmtMoney(m.balance));
     setVal('total-pl', fmtMoney(m.totalPL), plClass(m.totalPL));
-    setVal('equity-card', fmtMoney(accountM.balance));
-    setVal('equity', fmtMoney(accountM.balance));
+    setVal('equity-card', fmtMoney(m.balance));
+    setVal('equity', fmtMoney(m.balance));
     setVal('win-rate', fmtPct(m.winRate));
     setVal('total-trades', String(m.totalTrades));
     setVal('profit-factor', m.profitFactor == null ? '—' : (m.profitFactor === Infinity ? '∞' : m.profitFactor.toFixed(2)));
@@ -591,16 +639,28 @@
     if (!m.equityCurve.length || m.totalTrades === 0) { toggleChartEmpty('equity-chart', true); return; }
     toggleChartEmpty('equity-chart', false);
     const colors = themeColors();
+    const now = Date.now();
+    const cutoff = ({ '1D': 1, '1W': 7, '1M': 30, '3M': 90 }[state.equityTimeframe] || 0);
+    let points = m.equityCurve;
+    if (cutoff) {
+      const minMs = now - cutoff * 86400000;
+      const prior = m.equityCurve.filter((p) => p.timestamp < minMs).slice(-1);
+      const recent = m.equityCurve.filter((p) => p.timestamp >= minMs);
+      points = prior.length ? [prior[0], ...recent] : recent;
+    } else if (state.equityTimeframe === 'YTD') {
+      const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+      const prior = m.equityCurve.filter((p) => p.timestamp < yearStart).slice(-1);
+      const recent = m.equityCurve.filter((p) => p.timestamp >= yearStart);
+      points = prior.length ? [prior[0], ...recent] : recent;
+    }
+    if (!points.length) { toggleChartEmpty('equity-chart', true); return; }
     chart.setOption({
       grid: baseGrid(colors),
       tooltip: { trigger: 'axis', valueFormatter: (v) => fmtMoney(v) },
       xAxis: { type: 'time', axisLine: { lineStyle: { color: colors.border } }, axisLabel: { color: colors.dim } },
       yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: colors.border, opacity: 0.4 } }, axisLabel: { color: colors.dim, formatter: (v) => '$' + v } },
-      series: [{
-        type: 'line', showSymbol: false, smooth: 0.2, lineStyle: { color: colors.accent, width: 2 },
-        areaStyle: { color: colors.accent, opacity: 0.12 },
-        data: m.equityCurve.map((p) => [p.timestamp, Math.round(p.equity * 100) / 100]),
-      }],
+      series: [{ type: 'line', showSymbol: false, smooth: 0.2, lineStyle: { color: colors.accent, width: 2 }, areaStyle: { color: colors.accent, opacity: 0.12 }, data: points.map((p) => [p.timestamp, Math.round(p.equity * 100) / 100]) }],
+      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
     }, true);
   }
 
@@ -661,11 +721,15 @@
     const chart = getOrInitChart('challenge-progress-chart');
     if (!chart) return;
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
-    const target = acc?.rules?.target;
-    if (!acc || !target) { toggleChartEmpty('challenge-progress-chart', true); return; }
+    const phase = Number(acc?.currentPhase) || 1;
+    const phaseRules = acc?.phaseRules?.[`phase${phase}`] || acc?.rules || {};
+    const targetPct = Number(phaseRules.profitTargetPct ?? phaseRules.profitTargetPercent ?? phaseRules.targetPercent ?? 0);
+    const targetAmount = Number(phaseRules.profitTargetAmount ?? phaseRules.targetAmount ?? phaseRules.target ?? 0) ||
+      (targetPct > 0 ? (m.startingBalance * targetPct / 100) : 0);
+    if (!acc || !(targetAmount > 0)) { toggleChartEmpty('challenge-progress-chart', true); return; }
     toggleChartEmpty('challenge-progress-chart', false);
     const colors = themeColors();
-    const progressPct = Math.max(0, Math.min(100, (m.totalPL / Number(target)) * 100));
+    const progressPct = Math.max(0, Math.min(100, (m.totalPL / targetAmount) * 100));
     chart.setOption({
       series: [{
         type: 'gauge', startAngle: 90, endAngle: -270, radius: '85%',
@@ -710,7 +774,7 @@
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
     const dailyPL = state.dashboardMetrics?.dailyPL || {};
     const tradesByDay = {};
-    for (const t of state.filteredTrades) {
+    for (const t of state.trades) {
       if (t.closeTimeMs == null) continue;
       const k = dayKey(t.closeTimeMs);
       (tradesByDay[k] = tradesByDay[k] || []).push(t);
@@ -813,7 +877,7 @@
   }
   el.dayModal?.querySelectorAll('[data-modal-close]').forEach((b) => b.addEventListener('click', closeDayModal));
   el.dayModal?.addEventListener('click', (e) => { if (e.target === el.dayModal) closeDayModal(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDayModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDayModal(); closeCustomRangeModal(); } });
 
   /* ==================== 10. REBUILD PIPELINE ========================= */
   function rebuildDerivedAndRender() {
@@ -821,18 +885,12 @@
     populateFilterOptions();
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
     const startingBalance = acc ? Number(acc.startingBalance) || 0 : 0;
-
-    // Account balance/equity must always represent the complete selected account,
-    // never just today's/filtered trades. Performance metrics/charts can respect filters.
-    const accountMetrics = computeMetrics(state.trades, startingBalance);
-    const filteredMetrics = computeMetrics(state.filteredTrades, startingBalance);
-    state.accountMetrics = accountMetrics;
-    state.dashboardMetrics = filteredMetrics;
-
-    renderCards(filteredMetrics, accountMetrics);
-    renderAllCharts(filteredMetrics);
+    const m = computeMetrics(state.filteredTrades, startingBalance);
+    state.dashboardMetrics = m;
+    renderCards(m);
+    renderAllCharts(m);
     renderCalendar();
-    if (el.acctBalance && acc) el.acctBalance.textContent = fmtMoney(accountMetrics.balance);
+    if (el.acctBalance && acc) el.acctBalance.textContent = fmtMoney(m.balance);
   }
 
   el.refreshBtn?.addEventListener('click', () => {
@@ -842,6 +900,7 @@
   /* ============================= BOOT ================================ */
   (async function boot() {
     try {
+      await ensureECharts();
       const user = await initFirebase();
       if (!user) return; // layout.html's own auth guard redirects to login
       state.uid = user.uid;
