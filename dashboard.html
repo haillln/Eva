@@ -3,24 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Dashboard — EVA</title>
-  <!-- Apache ECharts will power the real charts in Phase 2. Loaded now
-       (classic, non-module) so window.echarts is ready before dashboard.js
-       is added later — mirrors how challenge.html loads it. No chart is
-       initialized here; the mounts below are empty containers only. -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 </head>
 <body>
 
   <template id="eva-page-content">
-    <!-- ============================================================
-         EVA — TRADING JOURNAL DASHBOARD
-         Stage 1: HTML + CSS structure only. No Firestore queries, no
-         calculations, no chart rendering, no calendar aggregation.
-         Every dynamic number below is a "—" placeholder behind a
-         data-value attribute; every chart is an empty mount ready for
-         ECharts; the calendar grid holds real calendar days (just
-         dates, not trading data) so Phase 2 can drop P/L straight in.
-         ============================================================ -->
+    <!-- EVA Trading Journal Dashboard — live Firebase data + ECharts runtime. -->
 
     <style>
       /* =========================================================
@@ -153,17 +140,6 @@
         padding:8px; display:none; z-index:60;
       }
       .db-account-panel.db-open{ display:block; }
-      @media (max-width:640px){
-        .db-account-dropdown{ position:static; }
-        .db-account-panel{
-          position:fixed;
-          top:50%; left:50%; right:auto;
-          transform:translate(-50%,-50%);
-          width:min(92vw,360px); max-width:92vw;
-          max-height:min(70dvh,520px); z-index:9999;
-        }
-      }
-
       .db-account-panel-header{ padding:8px 10px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--eva-text-dim); }
       .db-account-panel-footer{ padding:8px; border-top:1px solid var(--eva-border); margin-top:4px; }
 
@@ -193,6 +169,11 @@
       }
       .db-chart-canvas.db-chart-md{ height:220px; }
       .db-chart-canvas .db-echart-mount{ width:100%; height:100%; display:block; }
+      .db-chart-canvas.db-chart-expanded{
+        position:fixed; inset:20px; z-index:1100; height:auto; min-height:calc(100dvh - 40px);
+        box-shadow:0 24px 80px rgba(0,0,0,.35);
+      }
+      @media (max-width:640px){ .db-chart-canvas.db-chart-expanded{ inset:10px; min-height:calc(100dvh - 20px); } }
       .db-chart-tooltip-area{ position:absolute; inset:0; pointer-events:none; }
       .db-chart-empty{
         position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -363,7 +344,7 @@
                 </div>
               </div>
               <div class="db-account-panel-footer">
-                <a class="db-btn db-btn-primary" href="journal.html" style="width:100%; justify-content:center;">
+                <a class="db-btn db-btn-primary" href="challenge.html" style="width:100%; justify-content:center;">
                   <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Add Account
                 </a>
@@ -735,6 +716,9 @@
       </div>
 
     </div>
+
+    <!-- Dashboard runtime dependencies. These scripts live inside the template so
+         eva-loader can safely recreate them after the page content is mounted. -->
     <script type="module" src="dashboard.js"></script>
   </template>
 
