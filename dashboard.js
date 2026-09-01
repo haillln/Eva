@@ -4,16 +4,19 @@
    ASSUMED FIRESTORE SCHEMA (see note below):
      users/{uid}/accounts/{accountId}
        name, startingBalance, status, createdAt,
-       accountType/source/journalAccount marker identifying a JOURNAL account
+       rules: { target, maxDrawdownPct, dailyLossLimitPct }  (optional)
      users/{uid}/accounts/{accountId}/trades/{tradeId}
        symbol, direction, entry, exit, stopLoss, takeProfit, lotSize,
        risk, pnl (or profitLoss/pl), result ('win'|'loss'|'be'),
        rMultiple, openTime/closeTime (or date), session, strategy, notes
 
-   Dashboard is JOURNAL-ONLY. Challenge accounts must never appear here.
-   Journal accounts are identified by an explicit journal marker on the
-   Firestore account document; this avoids guessing from names/status/type.
-   The existing users/{uid}/accounts/{accountId}/trades/{tradeId} paths remain unchanged.
+   No challenge.html or existing account/trade Firestore code was
+   included in the upload — layout.html's Firebase script only touches
+   users/{uid} for theme/profile. So this schema is NEW, not reused
+   from anywhere, because there was nothing to reuse. If the real app
+   uses different collection/field names, only COLLECTION_PATHS and
+   normalizeTrade() below need to change — everything downstream reads
+   from the normalized shape.
    ===================================================================== */
 (function () {
   const wrap = document.getElementById('eva-dashboard');
@@ -35,6 +38,7 @@
     filters: { strategy: '', session: '', result: '', symbol: '' },
     calendarCursor: (() => { const d = new Date(); d.setDate(1); return d; })(),
     dashboardMetrics: null,
+    accountMetrics: null,
     unsubscribeTrades: null,
     unsubscribeAccounts: null,
   };
@@ -278,18 +282,6 @@
     });
   }
 
-  function isJournalAccount(acc) {
-    if (!acc || typeof acc !== 'object') return false;
-    // Explicit journal markers are preferred. Legacy journal accounts are
-    // accepted only when they do NOT carry challenge-only fields.
-    if (acc.journalAccount === true) return true;
-    const type = String(acc.accountType || '').toLowerCase();
-    const source = String(acc.source || acc.accountSource || '').toLowerCase();
-    if (type === 'journal' || type === 'trading journal' || source === 'journal') return true;
-    const challengeFields = ['phaseRules', 'phasesEnabled', 'currentPhase', 'deadline', 'firmName'];
-    return !challengeFields.some((key) => Object.prototype.hasOwnProperty.call(acc, key));
-  }
-
   function subscribeAccounts(uid) {
     if (state.unsubscribeAccounts) state.unsubscribeAccounts();
     const { fs, db } = fb;
@@ -297,12 +289,8 @@
     state.unsubscribeAccounts = fs.onSnapshot(
       ref,
       (snap) => {
-        state.accounts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isJournalAccount);
+        state.accounts = snap.docs.map((d) => normalizeAccount(d.id, d.data()));
         renderAccountSelector();
-        if (state.selectedAccountId && !state.accounts.some(a => a.id === state.selectedAccountId)) {
-          if (state.unsubscribeTrades) { state.unsubscribeTrades(); state.unsubscribeTrades = null; }
-          state.selectedAccountId = null; state.trades = []; state.filteredTrades = [];
-        }
         if (!state.selectedAccountId && state.accounts.length) {
           selectAccount(state.accounts[0].id);
         } else if (state.selectedAccountId) {
@@ -338,12 +326,17 @@
   }
 
   /* ===================== 5. ACCOUNT SELECTOR UI ===================== */
+  function normalizeAccount(id, raw) {
+    const startingBalance = Number(raw.startingBalance ?? raw.initialBalance ?? raw.accountSize ?? raw.balance ?? 0) || 0;
+    return { id, ...raw, name: raw.name ?? raw.accountName ?? id, startingBalance, status: raw.status ?? 'active' };
+  }
+
   function renderAccountSelector() {
     if (!el.acctList) return;
     if (!state.accounts.length) {
       el.acctList.innerHTML = `<div class="db-empty" style="padding:18px 10px;">
         <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
-        <span>No journal accounts yet</span></div>`;
+        <span>No accounts yet</span></div>`;
     } else {
       el.acctList.innerHTML = '';
       state.accounts.forEach((acc) => {
@@ -368,13 +361,18 @@
   function renderAccountHeader() {
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
     if (el.acctName) el.acctName.textContent = acc ? (acc.name || 'Account') : 'Select account';
-    if (el.acctBalance && acc) el.acctBalance.textContent = `Starting ${fmtMoney(Number(acc.startingBalance) || 0)}`;
+    if (el.acctBalance && acc) {
+      const m = state.accountMetrics;
+      el.acctBalance.textContent = m ? fmtMoney(m.balance) : `Starting ${fmtMoney(Number(acc.startingBalance) || 0)}`;
+    }
   }
 
   function renderEmptyDashboard() {
     ['balance', 'total-pl', 'equity-card', 'win-rate', 'total-trades', 'profit-factor', 'avg-win', 'avg-loss', 'drawdown', 'recovery-factor', 'best-day', 'worst-day', 'equity']
       .forEach((f) => setVal(f, '—'));
     setVal('equity-change-amount', 'No account selected');
+    state.accountMetrics = null;
+    state.dashboardMetrics = null;
   }
 
   function setAccountPanel(open) {
@@ -522,11 +520,11 @@
   function closeCustomRangeModal() { document.getElementById('custom-range-modal')?.classList.remove('db-modal-open'); }
 
   /* ======================= 7. CARDS RENDER =========================== */
-  function renderCards(m) {
-    setVal('balance', fmtMoney(m.balance));
+  function renderCards(m, accountM = m) {
+    setVal('balance', fmtMoney(accountM.balance));
     setVal('total-pl', fmtMoney(m.totalPL), plClass(m.totalPL));
-    setVal('equity-card', fmtMoney(m.balance));
-    setVal('equity', fmtMoney(m.balance));
+    setVal('equity-card', fmtMoney(accountM.balance));
+    setVal('equity', fmtMoney(accountM.balance));
     setVal('win-rate', fmtPct(m.winRate));
     setVal('total-trades', String(m.totalTrades));
     setVal('profit-factor', m.profitFactor == null ? '—' : (m.profitFactor === Infinity ? '∞' : m.profitFactor.toFixed(2)));
@@ -823,12 +821,18 @@
     populateFilterOptions();
     const acc = state.accounts.find((a) => a.id === state.selectedAccountId);
     const startingBalance = acc ? Number(acc.startingBalance) || 0 : 0;
-    const m = computeMetrics(state.filteredTrades, startingBalance);
-    state.dashboardMetrics = m;
-    renderCards(m);
-    renderAllCharts(m);
+
+    // Account balance/equity must always represent the complete selected account,
+    // never just today's/filtered trades. Performance metrics/charts can respect filters.
+    const accountMetrics = computeMetrics(state.trades, startingBalance);
+    const filteredMetrics = computeMetrics(state.filteredTrades, startingBalance);
+    state.accountMetrics = accountMetrics;
+    state.dashboardMetrics = filteredMetrics;
+
+    renderCards(filteredMetrics, accountMetrics);
+    renderAllCharts(filteredMetrics);
     renderCalendar();
-    if (el.acctBalance && acc) el.acctBalance.textContent = fmtMoney(m.balance);
+    if (el.acctBalance && acc) el.acctBalance.textContent = fmtMoney(accountMetrics.balance);
   }
 
   el.refreshBtn?.addEventListener('click', () => {
