@@ -158,12 +158,12 @@
         .db-account-dropdown{ position:static; }
         .db-account-panel{
           position:fixed;
-          top:calc(var(--eva-top-nav-height, 0px) + 12px);
-          left:50%; right:auto;
+          top:50%; left:50%; right:auto;
           width:min(92vw, 360px); min-width:0; max-width:none;
-          max-height:calc(100dvh - 96px);
-          transform:translateX(-50%);
-          z-index:2000;
+          max-height:calc(100dvh - 40px);
+          transform:translate(-50%, -50%);
+          z-index:10000;
+          margin:0;
         }
       }
       .db-account-panel-header{ padding:8px 10px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--eva-text-dim); }
@@ -738,133 +738,11 @@
 
     </div>
 
-    <!-- =========================================================
-         UI-ONLY INTERACTIONS — no Firestore, no calculations, no
-         chart rendering, no trade aggregation. Just: render a real
-         calendar grid, open/close the day modal, and toggle active
-         states on filter pills. Phase 2 replaces the marked spots.
-         ========================================================= -->
-    <script>
-      (function(){
-        const wrap = document.getElementById('eva-dashboard');
-        if (!wrap) return;
+    <!-- Dashboard runtime: real Firebase/data/chart/calendar functionality. -->
+    <script type="module" src="dashboard.js"></script>
 
-        /* ---- pill / tab active-state toggles (visual only) ---- */
-        function wireToggleGroup(selector, itemSelector, activeClass){
-          document.querySelectorAll(selector).forEach(group => {
-            group.querySelectorAll(itemSelector).forEach(btn => {
-              btn.addEventListener('click', () => {
-                group.querySelectorAll(itemSelector).forEach(b => b.classList.remove(activeClass));
-                btn.classList.add(activeClass);
-                // Phase 2: re-fetch/filter data for the selected range here.
-              });
-            });
-          });
-        }
-        wireToggleGroup('#equity-timeframe-switch', 'button', 'db-active');
-        wireToggleGroup('#filter-range', '.db-range-btn', 'db-active');
-
-        /* ---- account selector open/close (no accounts wired yet) ---- */
-        const acctTrigger = document.getElementById('db-account-trigger');
-        const acctPanel = document.getElementById('db-account-panel');
-        function setAccountPanel(open){
-          acctTrigger.classList.toggle('db-open', open);
-          acctPanel.classList.toggle('db-open', open);
-          acctTrigger.setAttribute('aria-expanded', String(open));
-        }
-        acctTrigger?.addEventListener('click', e => { e.stopPropagation(); setAccountPanel(!acctPanel.classList.contains('db-open')); });
-        document.addEventListener('click', e => { if (acctPanel && !acctPanel.contains(e.target) && e.target !== acctTrigger) setAccountPanel(false); });
-
-        /* ---- day detail modal open/close ---- */
-        const dayModal = document.getElementById('calendar-day-modal');
-        const dayModalDate = document.getElementById('calendar-day-modal-date');
-        function openDayModal(dateLabel){
-          dayModalDate.textContent = dateLabel;
-          dayModal.classList.add('db-modal-open');
-          dayModal.setAttribute('aria-hidden', 'false');
-          // Phase 2: fetch this day's trades and replace the empty state
-          // in #calendar-day-trades, and fill the data-value stats above.
-        }
-        function closeDayModal(){
-          dayModal.classList.remove('db-modal-open');
-          dayModal.setAttribute('aria-hidden', 'true');
-        }
-        dayModal?.querySelectorAll('[data-modal-close]').forEach(el => el.addEventListener('click', closeDayModal));
-        dayModal?.addEventListener('click', e => { if (e.target === dayModal) closeDayModal(); });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDayModal(); });
-
-        /* ---- calendar: real dates only, zero trading data ---- */
-        const calTitle = document.getElementById('calendar-title');
-        const calGrid = document.getElementById('calendar-grid');
-        const monthFmt = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
-        const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-        let calCursor = new Date(); // current month being displayed
-        calCursor.setDate(1);
-
-        function pad(n){ return String(n).padStart(2, '0'); }
-
-        function renderCalendar(){
-          calTitle.textContent = monthFmt.format(calCursor);
-          calGrid.innerHTML = '';
-
-          const year = calCursor.getFullYear();
-          const month = calCursor.getMonth();
-          const firstDow = new Date(year, month, 1).getDay();
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-          const today = new Date();
-          const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
-
-          for (let i = 0; i < firstDow; i++){
-            const empty = document.createElement('div');
-            empty.className = 'db-cal-day db-cal-empty';
-            calGrid.appendChild(empty);
-          }
-
-          for (let d = 1; d <= daysInMonth; d++){
-            const cell = document.createElement('div');
-            cell.className = 'db-cal-day';
-            const isoDate = `${year}-${pad(month + 1)}-${pad(d)}`;
-            cell.setAttribute('data-date', isoDate);
-            cell.setAttribute('data-pl', '');
-            cell.setAttribute('data-trades', '');
-            if (isCurrentMonth && d === today.getDate()) cell.classList.add('db-cal-today');
-
-            const dateEl = document.createElement('span');
-            dateEl.className = 'db-cal-date';
-            dateEl.textContent = String(d);
-            cell.appendChild(dateEl);
-            // Phase 2: append .db-cal-pl / .db-cal-trades spans here and
-            // toggle .db-cal-profit / .db-cal-loss once real P/L exists.
-
-            cell.addEventListener('click', () => {
-              const cellDate = new Date(year, month, d);
-              openDayModal(dayFmt.format(cellDate));
-            });
-            calGrid.appendChild(cell);
-          }
-        }
-
-        document.getElementById('calendar-prev-btn')?.addEventListener('click', () => {
-          calCursor.setMonth(calCursor.getMonth() - 1);
-          renderCalendar();
-        });
-        document.getElementById('calendar-next-btn')?.addEventListener('click', () => {
-          calCursor.setMonth(calCursor.getMonth() + 1);
-          renderCalendar();
-        });
-        document.getElementById('calendar-today-btn')?.addEventListener('click', () => {
-          calCursor = new Date();
-          calCursor.setDate(1);
-          renderCalendar();
-        });
-
-        renderCalendar();
-      })();
-    </script>
   </template>
 
   <script src="eva-loader.js"></script>
-  <script type="module" src="dashboard.js"></script>
 </body>
 </html>
-
