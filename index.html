@@ -153,19 +153,17 @@
         padding:8px; display:none; z-index:60;
       }
       .db-account-panel.db-open{ display:block; }
-      /* Mobile: centre the account menu in the viewport so it can never be clipped off-screen. */
       @media (max-width:640px){
         .db-account-dropdown{ position:static; }
         .db-account-panel{
           position:fixed;
           top:50%; left:50%; right:auto;
-          width:min(92vw, 360px); min-width:0; max-width:none;
-          max-height:calc(100dvh - 40px);
-          transform:translate(-50%, -50%);
-          z-index:10000;
-          margin:0;
+          transform:translate(-50%,-50%);
+          width:min(92vw,360px); max-width:92vw;
+          max-height:min(70dvh,520px); z-index:9999;
         }
       }
+
       .db-account-panel-header{ padding:8px 10px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--eva-text-dim); }
       .db-account-panel-footer{ padding:8px; border-top:1px solid var(--eva-border); margin-top:4px; }
 
@@ -737,12 +735,10 @@
       </div>
 
     </div>
-
-    <!-- Dashboard runtime: real Firebase/data/chart/calendar functionality. -->
     <script type="module" src="dashboard.js"></script>
-
   </template>
 
   <script src="eva-loader.js"></script>
 </body>
 </html>
+
