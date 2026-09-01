@@ -48,7 +48,7 @@
       .db-wrap button{ font-family:inherit; cursor:pointer; }
       .db-wrap select,.db-wrap input{ font-family:inherit; }
 
-      .db-section{ margin-bottom:20px; }
+      .db-section{ margin-bottom:22px; }
       .db-section-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
       .db-section-title{ font-family:var(--eva-font-display); font-size:1rem; font-weight:700; letter-spacing:-0.1px; display:flex; align-items:center; gap:8px; }
       .db-section-title svg{ width:17px; height:17px; stroke:var(--eva-text-dim); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -81,19 +81,21 @@
       .db-btn:disabled{ opacity:.5; cursor:not-allowed; }
 
       /* ---------- header ---------- */
-      .db-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:20px; flex-wrap:wrap; }
-      .db-header h1{ font-family:var(--eva-font-display); font-size:1.5rem; font-weight:700; }
-      .db-header p{ font-size:0.86rem; color:var(--eva-text-dim); margin-top:2px; }
-      .db-header-actions{ display:flex; align-items:center; gap:8px; }
+      .db-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+      .db-header h1{ font-family:var(--eva-font-display); font-size:1.7rem; font-weight:700; letter-spacing:-0.3px; }
+      .db-header p{ font-size:0.9rem; color:var(--eva-text-dim); margin-top:4px; }
+      .db-header-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
       /* ---------- account dropdown ---------- */
       .db-account-dropdown{ position:relative; }
       .db-account-trigger{
-        display:flex; align-items:center; gap:10px; padding:8px 12px;
-        border-radius:var(--db-radius-sm); border:1px solid var(--eva-border); background:var(--eva-surface-2);
-        min-width:180px; max-width:260px;
+        display:flex; align-items:center; gap:12px; padding:10px 14px 10px 12px;
+        border-radius:var(--db-radius-md); border:1px solid var(--eva-border); background:var(--eva-surface);
+        min-width:220px; max-width:280px; transition:border-color .2s var(--eva-ease), background-color .2s var(--eva-ease);
       }
-      .db-account-trigger-icon{ width:30px; height:30px; border-radius:9px; background:var(--eva-gradient); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .db-account-trigger:hover{ background:var(--eva-surface-2); }
+      .db-account-trigger.db-open{ border-color:var(--eva-accent-1); }
+      .db-account-trigger-icon{ width:34px; height:34px; border-radius:10px; background:var(--eva-gradient); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
       .db-account-trigger-icon svg{ width:16px; height:16px; stroke:#fff; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
       .db-account-trigger-info{ display:flex; flex-direction:column; align-items:flex-start; min-width:0; flex:1; }
       .db-account-trigger-name{ font-size:0.84rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
@@ -143,8 +145,8 @@
       .db-hero-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:var(--db-gap); }
       @media (max-width:900px){ .db-hero-grid{ grid-template-columns:repeat(2,1fr); } }
       .db-hero-card .db-label{ margin-bottom:6px; }
-      .db-hero-value{ font-size:1.6rem; }
-      @media (max-width:560px){ .db-hero-value{ font-size:1.3rem; } }
+      .db-hero-value{ font-size:1.75rem; }
+      @media (max-width:560px){ .db-hero-value{ font-size:1.35rem; } }
       .db-hero-sub{ font-size:0.76rem; color:var(--eva-text-dim); margin-top:4px; }
 
       /* ---------- date filter pills ---------- */
@@ -154,7 +156,10 @@
       .db-pill-switch button.db-active{ background:var(--eva-gradient); color:#fff; }
 
       /* ---------- stat grid ---------- */
-      .db-stat-card{ display:flex; flex-direction:column; gap:6px; }
+      .db-stat-card{ display:flex; flex-direction:column; gap:8px; }
+      .db-stat-top{ display:flex; align-items:center; justify-content:space-between; }
+      .db-stat-icon{ width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:var(--eva-surface-2); color:var(--eva-text-dim); flex-shrink:0; }
+      .db-stat-icon svg{ width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
       .db-stat-value{ font-size:1.25rem; }
       @media (max-width:560px){ .db-stat-value{ font-size:1.05rem; } }
 
@@ -187,9 +192,10 @@
         display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
         font-size:0.78rem; font-weight:700; color:var(--eva-text); position:relative; min-height:52px;
       }
+      .db-cal-day{ transition:border-color .15s var(--eva-ease); }
       .db-cal-day.db-cal-blank{ background:transparent; border-color:transparent; }
       .db-cal-day.db-has-trades{ cursor:pointer; }
-      .db-cal-day.db-has-trades:hover{ filter:brightness(1.08); }
+      .db-cal-day.db-has-trades:hover{ filter:brightness(1.08); border-color:var(--eva-accent-1); }
       .db-cal-day.db-day-pos{ background:var(--db-pos-bg); border-color:var(--db-pos-border); color:var(--db-pos); }
       .db-cal-day.db-day-neg{ background:var(--db-neg-bg); border-color:var(--db-neg-border); color:var(--db-neg); }
       .db-cal-day.db-day-be{ background:var(--db-warn-bg); border-color:var(--db-warn-border); color:var(--db-warn); }
@@ -225,34 +231,45 @@
 
       /* ---------- modals ---------- */
       .db-modal-overlay{
-        position:fixed; inset:0; background:rgba(6,8,12,0.55); backdrop-filter:blur(2px);
+        position:fixed; inset:0; background:rgba(5,7,12,0.55); backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
         display:flex; align-items:center; justify-content:center; padding:16px; z-index:1000;
-        opacity:0; pointer-events:none; transition:opacity .2s var(--eva-ease);
+        opacity:0; pointer-events:none; transition:opacity .22s var(--eva-ease);
       }
       .db-modal-overlay.db-open{ opacity:1; pointer-events:auto; }
       .db-modal{
         width:100%; max-width:520px; max-height:min(680px,86vh); background:var(--eva-surface);
-        border:1px solid var(--eva-border); border-radius:var(--db-radius-lg); box-shadow:var(--eva-shadow);
+        border:1px solid var(--eva-border); border-radius:22px; box-shadow:0 28px 90px rgba(0,0,0,.32);
         display:flex; flex-direction:column; overflow:hidden;
+        transform:translateY(10px) scale(.98); transition:transform .22s var(--eva-ease);
       }
-      .db-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:1px solid var(--eva-border); flex-shrink:0; }
-      .db-modal-title{ font-family:var(--eva-font-display); font-size:1.02rem; font-weight:700; }
-      .db-modal-close{ width:30px; height:30px; border-radius:9px; border:1px solid var(--eva-border); background:var(--eva-surface-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-      .db-modal-close svg{ width:15px; height:15px; stroke:var(--eva-text); fill:none; stroke-width:2; stroke-linecap:round; }
-      .db-modal-body{ padding:16px 18px; overflow-y:auto; flex:1; }
-      .db-modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:14px 18px; border-top:1px solid var(--eva-border); flex-shrink:0; }
+      .db-modal-overlay.db-open .db-modal{ transform:translateY(0) scale(1); }
+      .db-modal-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:18px 20px; border-bottom:1px solid var(--eva-border); flex-shrink:0; position:sticky; top:0; background:var(--eva-surface); z-index:2; }
+      .db-modal-title{ font-family:var(--eva-font-display); font-size:1.05rem; font-weight:700; }
+      .db-modal-sub{ font-size:0.78rem; color:var(--eva-text-dim); margin-top:3px; }
+      .db-modal-close{ width:32px; height:32px; border-radius:50%; border:1px solid var(--eva-border); background:var(--eva-surface-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background-color .15s var(--eva-ease), color .15s var(--eva-ease), border-color .15s var(--eva-ease); }
+      .db-modal-close:hover{ background:var(--db-neg-bg); color:var(--db-neg); border-color:var(--db-neg-border); }
+      .db-modal-close svg{ width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; }
+      .db-modal-body{ padding:18px 20px; overflow-y:auto; flex:1; overscroll-behavior:contain; }
+      .db-modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--eva-border); flex-shrink:0; position:sticky; bottom:0; background:var(--eva-surface); z-index:2; }
 
       .db-day-summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
-      .db-day-summary .db-card{ padding:12px; }
+      .db-day-stat{ background:var(--eva-surface-2); border:1px solid var(--eva-border); border-radius:var(--db-radius-sm); padding:12px 10px; text-align:center; }
+      .db-day-stat .db-num{ font-size:1.15rem; display:block; }
+      .db-day-stat .db-label{ margin-top:3px; display:block; }
       .db-day-trades-list{ display:flex; flex-direction:column; gap:10px; }
-      .db-trade-row{ border:1px solid var(--eva-border); border-radius:12px; padding:12px; background:var(--eva-surface-2); }
+      .db-trade-row{ border:1px solid var(--eva-border); border-radius:14px; padding:12px 14px; background:var(--eva-surface-2); }
       .db-trade-row-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
-      .db-trade-row-symbol{ font-weight:700; font-size:0.92rem; display:flex; align-items:center; gap:8px; }
+      .db-trade-row-symbol{ font-weight:700; font-size:0.92rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      .db-grade-badge{ width:22px; height:22px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; background:var(--eva-gradient); color:#fff; flex-shrink:0; }
       .db-pill{ font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
       .db-pill-long{ color:var(--db-pos); background:var(--db-pos-bg); }
       .db-pill-short{ color:var(--db-neg); background:var(--db-neg-bg); }
-      .db-trade-row-pl{ font-weight:700; font-size:0.92rem; }
+      .db-pill-tag{ color:var(--eva-text-dim); background:var(--eva-surface); border:1px solid var(--eva-border); text-transform:none; letter-spacing:0; }
+      .db-trade-row-pl{ font-weight:700; font-size:0.94rem; }
       .db-trade-row-meta{ font-size:0.76rem; color:var(--eva-text-dim); display:flex; flex-wrap:wrap; gap:6px 10px; }
+      .db-trade-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+      .db-tag{ font-size:0.68rem; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--eva-surface); border:1px solid var(--eva-border); color:var(--eva-text-dim); }
+      .db-trade-note{ margin-top:8px; font-size:0.78rem; font-style:italic; color:var(--eva-text-dim); border-top:1px dashed var(--eva-border); padding-top:8px; }
       .db-day-empty{ text-align:center; padding:30px 10px; color:var(--eva-text-dim); font-size:0.85rem; }
 
       .db-field{ margin-bottom:14px; }
@@ -361,18 +378,18 @@
             </div>
           </div>
           <div class="db-grid db-grid-4">
-            <div class="db-card db-stat-card"><span class="db-label">Total Trades</span><div class="db-num db-stat-value" id="stat-total-trades">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Win Rate</span><div class="db-num db-stat-value" id="stat-win-rate">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Average Win</span><div class="db-num db-stat-value" id="stat-avg-win">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Average Loss</span><div class="db-num db-stat-value" id="stat-avg-loss">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Profit Factor</span><div class="db-num db-stat-value" id="stat-profit-factor">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Average R</span><div class="db-num db-stat-value" id="stat-avg-r">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Largest Win</span><div class="db-num db-stat-value" id="stat-largest-win">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Largest Loss</span><div class="db-num db-stat-value" id="stat-largest-loss">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Max Drawdown</span><div class="db-num db-stat-value" id="stat-drawdown">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Recovery Factor</span><div class="db-num db-stat-value" id="stat-recovery">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Best Day</span><div class="db-num db-stat-value" id="stat-best-day">—</div></div>
-            <div class="db-card db-stat-card"><span class="db-label">Worst Day</span><div class="db-num db-stat-value" id="stat-worst-day">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Total Trades</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span></div><div class="db-num db-stat-value" id="stat-total-trades">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Win Rate</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg></span></div><div class="db-num db-stat-value" id="stat-win-rate">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Average Win</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><polyline points="17 6 23 6 23 12"/><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></span></div><div class="db-num db-stat-value" id="stat-avg-win">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Average Loss</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><polyline points="17 18 23 18 23 12"/><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/></svg></span></div><div class="db-num db-stat-value" id="stat-avg-loss">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Profit Factor</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><path d="M8 4h8l1 4-5 3-5-3 1-4z"/><path d="M12 11v9M8 20h8"/></svg></span></div><div class="db-num db-stat-value" id="stat-profit-factor">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Average R</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-4-4L3 16"/></svg></span></div><div class="db-num db-stat-value" id="stat-avg-r">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Largest Win</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg></span></div><div class="db-num db-stat-value" id="stat-largest-win">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Largest Loss</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="4.2" y1="4.2" x2="19.8" y2="19.8"/></svg></span></div><div class="db-num db-stat-value" id="stat-largest-loss">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Max Drawdown</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><path d="M22 22H2V2"/><path d="M4 18l6-8 4 3 6-9"/></svg></span></div><div class="db-num db-stat-value" id="stat-drawdown">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Recovery Factor</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span></div><div class="db-num db-stat-value" id="stat-recovery">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Best Day</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/></svg></span></div><div class="db-num db-stat-value" id="stat-best-day">—</div></div>
+            <div class="db-card db-stat-card"><div class="db-stat-top"><span class="db-label">Worst Day</span><span class="db-stat-icon"><svg viewBox="0 0 24 24"><path d="M22 22H2V2"/><path d="M4 18l6-8 4 3 6-9"/></svg></span></div><div class="db-num db-stat-value" id="stat-worst-day">—</div></div>
           </div>
         </div>
 
@@ -465,6 +482,7 @@
           <div class="db-modal-head">
             <div>
               <div class="db-modal-title" id="db-day-modal-title">—</div>
+              <div class="db-modal-sub" id="db-day-modal-sub">&nbsp;</div>
             </div>
             <button class="db-modal-close" type="button" data-close-modal="db-day-modal" aria-label="Close">
               <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
@@ -472,9 +490,9 @@
           </div>
           <div class="db-modal-body">
             <div class="db-day-summary">
-              <div class="db-card"><span class="db-label">Day P/L</span><div class="db-num" id="db-day-pl">—</div></div>
-              <div class="db-card"><span class="db-label">Trades</span><div class="db-num" id="db-day-count">—</div></div>
-              <div class="db-card"><span class="db-label">Win Rate</span><div class="db-num" id="db-day-winrate">—</div></div>
+              <div class="db-day-stat"><div class="db-num" id="db-day-pl">—</div><span class="db-label">P/L</span></div>
+              <div class="db-day-stat"><div class="db-num" id="db-day-count">—</div><span class="db-label">Trades</span></div>
+              <div class="db-day-stat"><div class="db-num" id="db-day-winrate">—</div><span class="db-label">Win Rate</span></div>
             </div>
             <div class="db-day-trades-list" id="db-day-trades-list"></div>
           </div>
